@@ -4,7 +4,7 @@
 // Authors:
 // Peter Polidoro peter@polidoro.io
 // ----------------------------------------------------------------------------
-#include "TMC2209.h"
+#include "TMC2209x.h"
 
 
 TMC2209::TMC2209()
@@ -804,11 +804,21 @@ void TMC2209::write(uint8_t register_address,
   write_datagram.data = reverseData(data);
   write_datagram.crc = calculateCrc(write_datagram, WRITE_READ_REPLY_DATAGRAM_SIZE);
 
+  auto counter1 = getInterfaceTransmissionCounter();
   sendDatagramUnidirectional(write_datagram, WRITE_READ_REPLY_DATAGRAM_SIZE);
+  auto counter2 = getInterfaceTransmissionCounter();
+  if (counter2 != (uint8_t)(counter1 + 1)) {
+    Serial.print("Transmission failed ");
+    Serial.print((uint8_t)(counter1+1));
+    Serial.print(" != ");
+    Serial.print(counter2);
+    Serial.println();
+  }
 }
 
 uint32_t TMC2209::read(uint8_t register_address)
 {
+  delayMicroseconds(100);
   ReadRequestDatagram read_request_datagram;
   read_request_datagram.bytes = 0;
   read_request_datagram.sync = SYNC;
@@ -840,6 +850,17 @@ uint32_t TMC2209::read(uint8_t register_address)
   {
     byte = serialRead();
     read_reply_datagram.bytes |= (byte << (byte_count++ * BITS_PER_BYTE));
+  }
+
+  auto foundCrc = read_reply_datagram.crc;
+  read_reply_datagram.crc = 0;
+  auto expectedCrc = calculateCrc(read_reply_datagram, WRITE_READ_REPLY_DATAGRAM_SIZE);
+  if (foundCrc != expectedCrc) {
+    Serial.println("CRC FAILURE");
+    delay(1);
+    return read(register_address);
+  } else {
+    // Serial.println("CRC OK");
   }
 
   return reverseData(read_reply_datagram.data);
