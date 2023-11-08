@@ -1,0 +1,6 @@
+BasedonStyle: Chromium
+IndentWidth: 2
+
+LanguageCpp
+ColumnLimit: 120
+LineEndingStyle: LE_LF

@@ -1,7 +1,7 @@
 #pragma once
-#include<string>
+#include <string>
 
-bool split(const String& cmd, const String& prefix, String& suffix) {
+bool split(const String &cmd, const String &prefix, String &suffix) {
   if (cmd.startsWith(prefix)) {
     suffix = cmd.substring(prefix.length());
     return true;
