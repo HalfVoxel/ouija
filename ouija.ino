@@ -7,7 +7,7 @@
 // See this reference for more details:
 // https://www.arduino.cc/reference/en/language/functions/communication/serial/
 
-HardwareSerial & serial_stream = Serial2;
+HardwareSerial& serial_stream = Serial2;
 
 #define STEP_PIN1 23
 #define DIR_PIN1 22
@@ -33,7 +33,7 @@ const uint8_t STALL_GUARD_THRESHOLD = 50;
 TMC2209 drivers[3];
 
 FastAccelStepperEngine engine = FastAccelStepperEngine();
-const int nSteppers = 3;
+const int nSteppers = 2;
 FastAccelStepper* steppers[nSteppers];
 
 
@@ -52,7 +52,7 @@ uint32_t motorsEnabled = ~0;
 void setMicrosteps(uint32_t v) {
   microsteps = v;
   for (int i = 0; i < nSteppers; i++) {
-    steppers[i]->setAcceleration(500000*microsteps);
+    steppers[i]->setAcceleration(500000 * microsteps);
     drivers[i].setMicrostepsPerStep(microsteps);
   }
 }
@@ -93,7 +93,7 @@ FastAccelStepper* setupStepper(TMC2209& driver, uint32_t step_pin, uint32_t dir_
 }
 
 float stallFraction(int motor) {
-  return (float)drivers[motor].getStallGuardResult() / (float)getStallBase(steppers[motor]->getSpeedInMilliHz()/(1000*microsteps));
+  return (float)drivers[motor].getStallGuardResult() / (float)getStallBase(steppers[motor]->getSpeedInMilliHz() / (1000 * microsteps));
 }
 bool isStalling(int motor) {
   Serial.print("Stall");
@@ -118,7 +118,7 @@ void tension() {
   }
   delay(50);
   int stalled = 0;
-  for(int it = 0;stalled != 0b111; it++) {
+  for (int it = 0; stalled != 0b111; it++) {
     // if ((it % 50) == 0) {
     //   for (int i = 0; i < nSteppers; i++) {
     //     Serial.print("S");
@@ -140,7 +140,7 @@ void tension() {
       auto b = stallFraction(i);
       Serial.print(":");
       Serial.print(b);
-      if ((stalled & (1<<i)) == 0 && b < 0.8f) {
+      if ((stalled & (1 << i)) == 0 && b < 0.8f) {
         stalled |= 1 << i;
         Serial.println("Stalling");
         steppers[i]->stopMove();
@@ -155,28 +155,31 @@ int32_t homingPositions[3];
 
 const uint32_t stepsPerRevolution = 200;
 const float shaftDiameter = 14.2f;
-const float tensioningFactor = 0.97f;
+const float tensioningFactor = 1.0f;
 const float tensioningOffset = 0.0f;
 
 float motorCoords[nSteppers][2] = {
   { 0, 0 },
-  { 186/2, 133 },
-  { 186, 0},
+  { 0, 0 },
 };
 
-const float triangleCenter[2] = {
-  (0 + 186 + 186/2) * 0.333333f,
-  (0 + 0 + 133) * 0.333333f,
+float motorProjection[nSteppers][2] = {
+  { 1, 0 },
+  { 0, 1 },
 };
 
+float boardCenter[2] = {
+  70,
+  28
+};
 
 void positionToMotor(const float coords[2], int32_t motorPositions[nSteppers]) {
   Serial.print("G: ");
   for (int i = 0; i < nSteppers; i++) {
     float dist = 0;
     for (int j = 0; j < 2; j++) {
-      auto d = coords[j] - motorCoords[i][j];
-      dist += d*d;
+      auto d = (coords[j] - motorCoords[i][j]) * motorProjection[i][j];
+      dist += d * d;
     }
     dist = sqrt(dist);
     Serial.print(dist);
@@ -192,13 +195,13 @@ void moveToPosition(const int32_t motorPositions[nSteppers], int32_t speed, int8
     return;
   }
   int32_t maxDelta = 0;
-  for (int i = 0; i < nSteppers;i++) {
+  for (int i = 0; i < nSteppers; i++) {
     if ((motorMask & (1 << i)) == 0) continue;
     auto delta = abs(motorPositions[i] - steppers[i]->getCurrentPosition());
     maxDelta = max(maxDelta, delta);
   }
   Serial.print("Moving to: ");
-  for (int i = 0; i < nSteppers;i++) {
+  for (int i = 0; i < nSteppers; i++) {
     if ((motorMask & (1 << i)) == 0) continue;
 
     auto delta = abs(motorPositions[i] - steppers[i]->getCurrentPosition());
@@ -220,159 +223,71 @@ void moveToPosition(const int32_t motorPositions[nSteppers], int32_t speed, int8
 }
 
 int32_t distanceToMicrosteps(float d) {
-  return (int32_t)(d * microsteps * stepsPerRevolution/ ((float)PI * shaftDiameter));
+  return (int32_t)(d * microsteps * stepsPerRevolution / ((float)PI * shaftDiameter));
 }
 
-void homeMotors() {
-  int nSteppers2 = 2;
-  for (int i = 0; i < nSteppers2; i++) {
+void homeStep(int speed, float stallThresholds[nSteppers]) {
+  for (int i = 0; i < nSteppers; i++) {
     drivers[i].setStandstillMode(TMC2209::StandstillMode::NORMAL);
-    drivers[i].setHoldCurrent(50);
-    drivers[i].setRunCurrent(50);
-    steppers[i]->setSpeedInHz(microsteps * 40);
+    drivers[i].setHoldCurrent(30);
+    drivers[i].setRunCurrent(30);
+    steppers[i]->setSpeedInHz(microsteps * speed);
     steppers[i]->runBackward();
   }
   delay(200);
   {
     int stalled = 0;
-    for(int it = 0; stalled != 0b11 && it < 5000 / (6*4*2); it++) {
-      float b[1] = { 0};
-      for (int t = 0; t < 6*4; t++) {
-        for (int i = 0; i < 1; i++) {
+    for (int it = 0; stalled != 0b11 && it < 20000 / (3 * 4 * 2); it++) {
+      float b[nSteppers] = { 0, 0 };
+      for (int t = 0; t < 3 * 4; t++) {
+        for (int i = 0; i < nSteppers; i++) {
           b[i] += stallFraction(i);
         }
         delay(2);
       }
-      for (int i = 0; i < 1; i++) {
-          b[i] /= 6*4;
+      for (int i = 0; i < nSteppers; i++) {
+        b[i] /= 3 * 4;
       }
-      Serial.print("S:");
-      Serial.println(b[0]);
-      for (int i = 0; i < nSteppers2; i++) {
-          if (b[i] < 1.0f) {
-            stalled |= 1 << i;
-            steppers[i]->forceStopAndNewPosition(0);
-          }
+      Serial.print("S0:");
+      Serial.print(b[0]);
+      Serial.print(" S1:");
+      Serial.println(b[1]);
+      for (int i = 0; i < nSteppers; i++) {
+        if (b[i] < stallThresholds[i]) {
+          stalled |= 1 << i;
+          steppers[i]->forceStopAndNewPosition(0);
+          homingPositions[i] = 0;
+        }
       }
     }
   }
+}
 
-  for (int i = 0; i < nSteppers2; i++) {
-    steppers[i]->setSpeedInHz(microsteps * 40);
+void homeMotors() {
+  float t1[nSteppers] = { 1.0f, 1.1f };
+  homeStep(80, t1);
+  for (int i = 0; i < nSteppers; i++) {
     steppers[i]->move(distanceToMicrosteps(10), true);
   }
 
-  for (int k = 0; k < 100; k++) {
-    for (int i = 0; i < nSteppers2; i++) {
-      auto d = ((k % 2) == 0 ? 1 : -1) * distanceToMicrosteps(20);
-      Serial.println(d);
-      steppers[i]->move(d, false);
-    }
-    delay(50);
-    blockUntilNotMoving();
-  }
-    
-
-  
-  return;
-
-  int speed = 80;
+  Serial.println("Step 2");
+  float t2[nSteppers] = { 1.0f, 1.1f };
+  homeStep(40, t2);
   for (int i = 0; i < nSteppers; i++) {
-    drivers[i].setStandstillMode(TMC2209::StandstillMode::NORMAL);
-    drivers[i].setHoldCurrent(10);
-    drivers[i].setRunCurrent(10);
-    steppers[i]->setSpeedInHz(microsteps * 80);
-  }
-  for (int i = 0; i < nSteppers; i++) {
-    steppers[i]->runBackward();
-  }
-  delay(500);
-  int stalled = 0;
-  for(int it = 0; stalled != 0b111 && it < 5000 / (6*4*2); it++) {
-    float b[nSteppers] = { 0, 0, 0};
-    for (int t = 0; t < 6*4; t++) {
-      for (int i = 0; i < nSteppers; i++) {
-        b[i] += stallFraction(i);
-      }
-      delay(2);
-    }
-    for (int i = 0; i < nSteppers; i++) {
-        b[i] /= 6*4;
-    }
-    for (int i = 0; i < nSteppers; i++) {
-        if (b[i] < 1.2f) {
-          stalled |= 1 << i;
-          steppers[i]->forceStop();
-        }
-    }
+    steppers[i]->move(distanceToMicrosteps(5), true);
   }
 
-  {
-    // Home as if the current position is in the center of the triangle
-    int32_t offsets[3];
-    positionToMotor(triangleCenter, offsets);
-    for (int i = 0; i < nSteppers; i++) {
-      homingPositions[i] = steppers[i]->getCurrentPosition() - (offsets[i] - homingPositions[i]);
-    }
-  }
+  // for (int k = 0; k < 100; k++) {
+  //   for (int i = 0; i < nSteppers; i++) {
+  //     auto d = ((k % 2) == 0 ? 1 : -1) * distanceToMicrosteps(20);
+  //     Serial.println(d);
+  //     steppers[i]->move(d, false);
+  //   }
+  //   delay(50);
+  //   blockUntilNotMoving();
+  // }
 
-  delay(100);
 
-  for (int homingIteration = 0; homingIteration < 3; homingIteration++) {
-    bool firstIteration = homingIteration > 0 && false;
-    for (int motorToHome = 0; motorToHome < nSteppers; motorToHome++) {
-      Serial.print("Homing motor ");
-      Serial.println(motorToHome);
-
-      for (int i = 0; i < nSteppers; i++) {
-        drivers[i].setStandstillMode(i <= motorToHome || !firstIteration ? TMC2209::StandstillMode::NORMAL : TMC2209::StandstillMode::FREEWHEELING);
-        drivers[i].setHoldCurrent(i <= motorToHome || !firstIteration ? 50 : 0);
-        drivers[i].setRunCurrent(10);
-        steppers[i]->setSpeedInHz(microsteps * speed);
-      }
-      for (int i = 0; i < nSteppers; i++) {
-        steppers[i]->stopMove();
-      }
-
-      // Reverse previous motors to let the homing motor pull the thread freely
-      int8_t mask = !firstIteration ? ~0 : (1 << motorToHome) - 1;
-      int32_t target2[3];
-      positionToMotor(motorCoords[motorToHome], target2);
-      for (int i = 0; i < nSteppers; i++) {
-        target2[i] += distanceToMicrosteps(15); // Unwind a little bit extra
-      }
-      moveToPosition(target2, (int32_t)(speed*1.0f), mask);
-      steppers[motorToHome]->runBackward();
-
-      delay(homingIteration == 0 && motorToHome == 0 ? 50 : 1000);
-      int stalled = 0;
-      for(int it = 0;; it++) {
-        float b = 0;
-        for (int t = 0; t < 6*4; t++) {
-          b += stallFraction(motorToHome);
-          delay(2);
-        }
-        b /= 6*4;
-        Serial.print("Stall:");
-        Serial.println(b);
-        if (b < 1.2f) {
-          Serial.println("Stalling");
-          homingPositions[motorToHome] = steppers[motorToHome]->getCurrentPosition();
-          Serial.print("Homed at: ");
-          Serial.println(homingPositions[motorToHome]);
-          steppers[motorToHome]->forceStop();
-          break;
-        }
-        delay(1);
-      }
-
-      // Revert overextension of motors, to avoid excessive slop when starting to home the next motor
-      mask = !firstIteration ? ~0 : (1 << motorToHome) - 1;
-      positionToMotor(motorCoords[motorToHome], target2);
-      moveToPosition(target2, speed, mask);
-      blockUntilNotMoving();
-    }
-  }
 
   for (int i = 0; i < nSteppers; i++) {
     drivers[i].setStandstillMode(TMC2209::StandstillMode::NORMAL);
@@ -380,19 +295,25 @@ void homeMotors() {
     drivers[i].setRunCurrent(50);
   }
   int32_t target[3];
-  positionToMotor(triangleCenter, target);
-  moveToPosition(target, 80);
+  positionToMotor(boardCenter, target);
+  moveToPosition(target, 160);
   blockUntilNotMoving();
 
   int steps = 100;
-  for (int i = 0; i < 2*steps; i++) {
+  for (int i = 0; i < 20 * steps; i++) {
+    auto time = micros();
+    auto dt = (time - lastT) * 0.000001f;
+    lastT = time;
+
+    readAndSmooth(POT1, p1, 10 * dt);
+
     float t = i / (float)steps;
     float c[2];
-    memcpy(c, triangleCenter, sizeof(triangleCenter));
-    c[0] += 30 * cos(t * (float)TWO_PI);
-    c[1] += 30 * sin(t * (float)TWO_PI);
+    memcpy(c, boardCenter, sizeof(boardCenter));
+    c[0] += 60 * cos(t * (float)TWO_PI);
+    c[1] += 28 * sin(t * (float)TWO_PI);
     positionToMotor(c, target);
-    moveToPosition(target, 80);
+    moveToPosition(target, p1 * 800);
     auto t0 = millis();
     blockUntilAtTarget(30 * microsteps, target);
     auto t1 = millis();
@@ -402,16 +323,16 @@ void homeMotors() {
 }
 
 void blockUntilNotMoving() {
-  for (int i = 0; i < nSteppers;i++) {
+  for (int i = 0; i < nSteppers; i++) {
     while (steppers[i]->isRunning()) delay(1);
   }
 }
 
 void blockUntilAtTarget(int32_t maxMicrosteps, int32_t target[nSteppers]) {
   bool any = true;
-  while(any) {
+  while (any) {
     any = false;
-    for (int i = 0; i < nSteppers;i++) {
+    for (int i = 0; i < nSteppers; i++) {
       while (abs(steppers[i]->getCurrentPosition() - target[i]) > maxMicrosteps) {
         any = true;
         // Serial.print("E");
@@ -429,9 +350,9 @@ void blockUntilAlmostNotMoving(int32_t maxMicrosteps) {
   delay(1);
 
   bool any = true;
-  while(any) {
+  while (any) {
     any = false;
-    for (int i = 0; i < nSteppers;i++) {
+    for (int i = 0; i < nSteppers; i++) {
       while (abs(steppers[i]->getCurrentPosition() - steppers[i]->targetPos()) > maxMicrosteps) {
         any = true;
         delay(1);
@@ -454,8 +375,8 @@ void home() {
 
 void adjustMotorPositions() {
   for (int i = 0; i < nSteppers; i++) {
-    float dir[2] = { triangleCenter[0] - motorCoords[i][0], triangleCenter[1] - motorCoords[i][1]};
-    float len = sqrt(dir[0]*dir[0] + dir[1]*dir[1]);
+    float dir[2] = { boardCenter[0] - motorCoords[i][0], boardCenter[1] - motorCoords[i][1] };
+    float len = sqrt(dir[0] * dir[0] + dir[1] * dir[1]);
     dir[0] /= len;
     dir[1] /= len;
     for (int j = 0; j < 2; j++) {
@@ -472,13 +393,12 @@ void adjustMotorPositions() {
   }
 }
 
-void setup()
-{
+void setup() {
   pinMode(POT1, INPUT);
   pinMode(POT2, INPUT);
   pinMode(POT3, INPUT);
   Serial.begin(SERIAL_BAUD_RATE);
-  adjustMotorPositions();
+  // adjustMotorPositions();
 
   engine.init();
   steppers[0] = setupStepper(drivers[0], STEP_PIN1, DIR_PIN1, TMC2209::SerialAddress::SERIAL_ADDRESS_0);
@@ -504,7 +424,7 @@ void setup()
     moveToPosition(target2, 80);
     delay(100);
     blockUntilNotMoving();
-    
+
     Serial.println("Extending steppers");
     // Extend steppers randomly
     for (int i = 0; i < nSteppers; i++) {
@@ -534,12 +454,12 @@ int32_t stallBase[] = {
 };
 
 float lerp(float a, float b, float t) {
-  return a + (b-a)*min(1.0f, max(0.0f, t));
+  return a + (b - a) * min(1.0f, max(0.0f, t));
 }
 
 int32_t getStallBase(int32_t speedHz) {
-  int maxIndex = sizeof(stallBase)/sizeof(*stallBase);
-  float t = sqrt(speedHz/(float)STALL_BASE_STRIDE_HZ) - 1;
+  int maxIndex = sizeof(stallBase) / sizeof(*stallBase);
+  float t = sqrt(speedHz / (float)STALL_BASE_STRIDE_HZ) - 1;
   int index1 = (int)t;
   int index2 = index1 + 1;
   float interp = t - index1;
@@ -571,12 +491,12 @@ void calibrate(FastAccelStepper* stepper, TMC2209& driver) {
     Serial.print(speed);
     Serial.print(" ");
     Serial.println(stall);
-    stallBase[i-1] = stall;
+    stallBase[i - 1] = stall;
   }
   for (int i = 1; i <= 10; i++) {
     int32_t speed = i * i * STALL_BASE_STRIDE_HZ;
     Serial.print("Stall check: ");
-    Serial.print(stallBase[i-1]);
+    Serial.print(stallBase[i - 1]);
     Serial.print(" = ");
     Serial.println(getStallBase(speed));
   }
@@ -645,20 +565,19 @@ void readCommands() {
 
 bool edge(unsigned long lastT, unsigned long t, unsigned long interval) {
   interval *= 1000;
-  return (lastT/interval) != (t/interval);
+  return (lastT / interval) != (t / interval);
 }
 
-void loop()
-{
+void loop() {
   readCommands();
   auto t = micros();
   auto dt = (t - lastT) * 0.000001f;
 
-  readAndSmooth(POT1, p1, 10*dt);
-  readAndSmooth(POT2, p2, 10*dt);
-  readAndSmooth(POT3, p3, 10*dt);
+  readAndSmooth(POT1, p1, 10 * dt);
+  readAndSmooth(POT2, p2, 10 * dt);
+  readAndSmooth(POT3, p3, 10 * dt);
   realSpeed = manualSpeed != -1 ? manualSpeed : (int32_t)(p1 * 500);
-  auto current = 50; //(int32_t)(p2 * 100);
+  auto current = 50;  //(int32_t)(p2 * 100);
 
   if (abs(current - lastCurrent) > 3) {
     lastCurrent = current;
@@ -667,8 +586,8 @@ void loop()
     }
   }
 
-  auto targetPos = sin(t*0.001f) * 200 + sin(t*0.01f) * 20 + sin(t*0.01242f) * 30;
-  
+  auto targetPos = sin(t * 0.001f) * 200 + sin(t * 0.01f) * 20 + sin(t * 0.01242f) * 30;
+
   if (realSpeed == 0) {
     for (int i = 0; i < nSteppers; i++) steppers[i]->stopMove();
   } else {
@@ -702,12 +621,11 @@ void loop()
     // Serial.print(targetPos);
     Serial.print(t - lastT);
     Serial.print(",pos:");
-    Serial.print((steppers[0]->getCurrentPosition()/(int32_t)microsteps));
+    Serial.print((steppers[0]->getCurrentPosition() / (int32_t)microsteps));
     Serial.print(",dt:");
-    Serial.println(dt*1000.0f);
+    Serial.println(dt * 1000.0f);
   }
 
   lastT = t;
   delay(DELAY);
 }
-
