@@ -31,24 +31,22 @@ const uint8_t dir_pins[nSteppers] = {DIR_PIN1, DIR_PIN2};
 const long SERIAL_BAUD_RATE = 115200;
 const int DELAY = 1;
 const uint8_t RUN_CURRENT_PERCENT = 50;
-const uint8_t STALL_GUARD_THRESHOLD = 50;
 
 int32_t lastCurrent = -1;
 
-float p1 = 0;
-float p2 = 0;
-float p3 = 0;
 float lastT = 0;
+AnalogSensor p1(POT1, 10);
+AnalogSensor p2(POT2, 10);
+AnalogSensor p3(POT3, 10);
 
 uint32_t manualSpeed = -1;
 uint32_t realSpeed = 0;
 uint32_t motorsEnabled = ~0;
-uint32_t asdasd = ~0;
 
 void hardwareSetup() {
-  pinMode(POT1, INPUT);
-  pinMode(POT2, INPUT);
-  pinMode(POT3, INPUT);
+  p1.init();
+  p2.init();
+  p3.init();
   Serial.begin(SERIAL_BAUD_RATE);
   // adjustMotorPositions();
 
@@ -158,10 +156,11 @@ void loop() {
   auto t = micros();
   auto dt = (t - lastT) * 0.000001f;
 
-  readAndSmooth(POT1, p1, 10 * dt);
-  readAndSmooth(POT2, p2, 10 * dt);
-  readAndSmooth(POT3, p3, 10 * dt);
-  realSpeed = manualSpeed != -1 ? manualSpeed : (int32_t)(p1 * 500);
+  p1.update();
+  p2.update();
+  p3.update();
+
+  realSpeed = manualSpeed != -1 ? manualSpeed : (int32_t)(p1.value * 500);
   auto current = 50; //(int32_t)(p2 * 100);
 
   if (abs(current - lastCurrent) > 3) {

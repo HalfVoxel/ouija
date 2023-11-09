@@ -1,4 +1,5 @@
 #pragma once
+#include <FastAccelStepper.h>
 #include <TMC2209x.h>
 
 uint32_t microsteps = 16;
