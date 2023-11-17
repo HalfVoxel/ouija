@@ -10,51 +10,41 @@
 #include <Arduino.h>
 
 #if !defined(ESP32) && !defined(SAMD_SERIES) && !defined(ARDUINO_RASPBERRY_PI_PICO)
-#  define SOFTWARE_SERIAL_IMPLEMENTED true
+#define SOFTWARE_SERIAL_IMPLEMENTED true
 #else
-#  define SOFTWARE_SERIAL_IMPLEMENTED false
+#define SOFTWARE_SERIAL_IMPLEMENTED false
 #endif
 #if SOFTWARE_SERIAL_IMPLEMENTED
-#  include <SoftwareSerial.h>
+#include <SoftwareSerial.h>
 #endif
 
-
-class TMC2209
-{
+class TMC2209 {
 public:
   TMC2209();
 
-  enum SerialAddress
-  {
-    SERIAL_ADDRESS_0=0,
-    SERIAL_ADDRESS_1=1,
-    SERIAL_ADDRESS_2=2,
-    SERIAL_ADDRESS_3=3,
+  enum SerialAddress {
+    SERIAL_ADDRESS_0 = 0,
+    SERIAL_ADDRESS_1 = 1,
+    SERIAL_ADDRESS_2 = 2,
+    SERIAL_ADDRESS_3 = 3,
   };
-  // Alternate rx and tx pins may be specified for certain microcontrollers e.g.
-  // ESP32
-  #ifdef ESP32
-  void setup(HardwareSerial & serial,
-    long serial_baud_rate=115200,
-    SerialAddress serial_address=SERIAL_ADDRESS_0,
-    int16_t alternate_rx_pin=-1,
-    int16_t alternate_tx_pin=-1);
-  #else
+// Alternate rx and tx pins may be specified for certain microcontrollers e.g.
+// ESP32
+#ifdef ESP32
+  void setup(HardwareSerial &serial, long serial_baud_rate = 115200, SerialAddress serial_address = SERIAL_ADDRESS_0,
+             int16_t alternate_rx_pin = -1, int16_t alternate_tx_pin = -1);
+#else
   // Identify which microcontroller serial port is connected to the TMC2209 e.g.
   // Serial1, Serial2, etc. Optionally identify which serial address is assigned
   // to the TMC2209 if not the default of SERIAL_ADDRESS_0.
-  void setup(HardwareSerial & serial,
-    long serial_baud_rate=115200,
-    SerialAddress serial_address=SERIAL_ADDRESS_0);
-  #endif
+  void setup(HardwareSerial &serial, long serial_baud_rate = 115200, SerialAddress serial_address = SERIAL_ADDRESS_0);
+#endif
 
 #if SOFTWARE_SERIAL_IMPLEMENTED
   // Software serial ports should only be used for unidirectional communication
   // The RX pin does not need to be connected, but it must be specified when
   // creating an instance of a SoftwareSerial object
-  void setup(SoftwareSerial & serial,
-    long serial_baud_rate=9600,
-    SerialAddress serial_address=SERIAL_ADDRESS_0);
+  void setup(SoftwareSerial &serial, long serial_baud_rate = 9600, SerialAddress serial_address = SERIAL_ADDRESS_0);
 #endif
 
   // unidirectional methods
@@ -78,19 +68,16 @@ public:
   // range 0-100
   void setHoldDelay(uint8_t percent);
   // range 0-100
-  void setAllCurrentValues(uint8_t run_current_percent,
-    uint8_t hold_current_percent,
-    uint8_t hold_delay_percent);
+  void setAllCurrentValues(uint8_t run_current_percent, uint8_t hold_current_percent, uint8_t hold_delay_percent);
 
   void enableInverseMotorDirection();
   void disableInverseMotorDirection();
 
-  enum StandstillMode
-  {
-    NORMAL=0,
-    FREEWHEELING=1,
-    STRONG_BRAKING=2,
-    BRAKING=3,
+  enum StandstillMode {
+    NORMAL = 0,
+    FREEWHEELING = 1,
+    STRONG_BRAKING = 2,
+    BRAKING = 3,
   };
   void setStandstillMode(StandstillMode mode);
 
@@ -124,23 +111,20 @@ public:
 
   // lower_threshold: min = 1, max = 15
   // upper_threshold: min = 0, max = 15, 0-2 recommended
-  void enableCoolStep(uint8_t lower_threshold=1,
-    uint8_t upper_threshold=0);
+  void enableCoolStep(uint8_t lower_threshold = 1, uint8_t upper_threshold = 0);
   void disableCoolStep();
-  enum CurrentIncrement
-  {
-    CURRENT_INCREMENT_1=0,
-    CURRENT_INCREMENT_2=1,
-    CURRENT_INCREMENT_4=2,
-    CURRENT_INCREMENT_8=3,
+  enum CurrentIncrement {
+    CURRENT_INCREMENT_1 = 0,
+    CURRENT_INCREMENT_2 = 1,
+    CURRENT_INCREMENT_4 = 2,
+    CURRENT_INCREMENT_8 = 3,
   };
   void setCoolStepCurrentIncrement(CurrentIncrement current_increment);
-  enum MeasurementCount
-  {
-    MEASUREMENT_COUNT_32=0,
-    MEASUREMENT_COUNT_8=1,
-    MEASUREMENT_COUNT_2=2,
-    MEASUREMENT_COUNT_1=3,
+  enum MeasurementCount {
+    MEASUREMENT_COUNT_32 = 0,
+    MEASUREMENT_COUNT_8 = 1,
+    MEASUREMENT_COUNT_2 = 2,
+    MEASUREMENT_COUNT_1 = 3,
   };
   void setCoolStepMeasurementCount(MeasurementCount measurement_count);
   void setCoolStepDurationThreshold(uint32_t duration_threshold);
@@ -170,8 +154,7 @@ public:
 
   uint16_t getMicrostepsPerStep();
 
-  struct Settings
-  {
+  struct Settings {
     bool is_communicating;
     bool is_setup;
     bool software_enabled;
@@ -195,8 +178,7 @@ public:
   };
   Settings getSettings();
 
-  struct Status
-  {
+  struct Status {
     uint32_t over_temperature_warning : 1;
     uint32_t over_temperature_shutdown : 1;
     uint32_t short_to_ground_a : 1;
@@ -232,16 +214,15 @@ public:
   uint16_t getMicrostepCounter();
 
 private:
-  HardwareSerial * hardware_serial_ptr_;
+  HardwareSerial *hardware_serial_ptr_;
 #if SOFTWARE_SERIAL_IMPLEMENTED
-  SoftwareSerial * software_serial_ptr_;
+  SoftwareSerial *software_serial_ptr_;
 #endif
   uint32_t serial_baud_rate_;
   uint8_t serial_address_;
   int16_t hardware_enable_pin_;
 
-  void initialize(long serial_baud_rate=115200,
-    SerialAddress serial_address=SERIAL_ADDRESS_0);
+  void initialize(long serial_baud_rate = 115200, SerialAddress serial_address = SERIAL_ADDRESS_0);
   int serialAvailable();
   size_t serialWrite(uint8_t c);
   int serialRead();
@@ -263,10 +244,8 @@ private:
   // Datagrams
   const static uint8_t WRITE_READ_REPLY_DATAGRAM_SIZE = 8;
   const static uint8_t DATA_SIZE = 4;
-  union WriteReadReplyDatagram
-  {
-    struct
-    {
+  union WriteReadReplyDatagram {
+    struct {
       uint64_t sync : 4;
       uint64_t reserved : 4;
       uint64_t serial_address : 8;
@@ -284,10 +263,8 @@ private:
   const static uint8_t READ_REPLY_SERIAL_ADDRESS = 0b11111111;
 
   const static uint8_t READ_REQUEST_DATAGRAM_SIZE = 4;
-  union ReadRequestDatagram
-  {
-    struct
-    {
+  union ReadRequestDatagram {
+    struct {
       uint32_t sync : 4;
       uint32_t reserved : 4;
       uint32_t serial_address : 8;
@@ -300,10 +277,8 @@ private:
 
   // General Configuration Registers
   const static uint8_t ADDRESS_GCONF = 0x00;
-  union GlobalConfig
-  {
-    struct
-    {
+  union GlobalConfig {
+    struct {
       uint32_t i_scale_analog : 1;
       uint32_t internal_rsense : 1;
       uint32_t enable_spread_cycle : 1;
@@ -321,10 +296,8 @@ private:
   GlobalConfig global_config_;
 
   const static uint8_t ADDRESS_GSTAT = 0x01;
-  union GlobalStatus
-  {
-    struct
-    {
+  union GlobalStatus {
+    struct {
       uint32_t reset : 1;
       uint32_t drv_err : 1;
       uint32_t uv_cp : 1;
@@ -336,10 +309,8 @@ private:
   const static uint8_t ADDRESS_IFCNT = 0x02;
 
   const static uint8_t ADDRESS_REPLYDELAY = 0x03;
-  union ReplyDelay
-  {
-    struct
-    {
+  union ReplyDelay {
+    struct {
       uint32_t reserved_0 : 8;
       uint32_t replydelay : 4;
       uint32_t reserved_1 : 20;
@@ -348,10 +319,8 @@ private:
   };
 
   const static uint8_t ADDRESS_IOIN = 0x06;
-  union Input
-  {
-    struct
-    {
+  union Input {
+    struct {
       uint32_t enn : 1;
       uint32_t reserved_0 : 1;
       uint32_t ms1 : 1;
@@ -369,13 +338,10 @@ private:
   };
   const static uint8_t VERSION = 0x21;
 
-
   // Velocity Dependent Driver Feature Control Register Set
   const static uint8_t ADDRESS_IHOLD_IRUN = 0x10;
-  union DriverCurrent
-  {
-    struct
-    {
+  union DriverCurrent {
+    struct {
       uint32_t ihold : 5;
       uint32_t reserved_0 : 3;
       uint32_t irun : 5;
@@ -417,10 +383,8 @@ private:
 
   const static uint8_t ADDRESS_COOLCONF = 0x42;
   const static uint8_t COOLCONF_DEFAULT = 0;
-  union CoolConfig
-  {
-    struct
-    {
+  union CoolConfig {
+    struct {
       uint32_t semin : 4;
       uint32_t reserved_0 : 1;
       uint32_t seup : 2;
@@ -450,10 +414,8 @@ private:
 
   // Driver Register Set
   const static uint8_t ADDRESS_CHOPCONF = 0x6C;
-  union ChopperConfig
-  {
-    struct
-    {
+  union ChopperConfig {
+    struct {
       uint32_t toff : 4;
       uint32_t hstart : 3;
       uint32_t hend : 4;
@@ -491,20 +453,16 @@ private:
   const static size_t MICROSTEPS_PER_STEP_MAX = 256;
 
   const static uint8_t ADDRESS_DRV_STATUS = 0x6F;
-  union DriveStatus
-  {
-    struct
-    {
+  union DriveStatus {
+    struct {
       Status status;
     };
     uint32_t bytes;
   };
 
   const static uint8_t ADDRESS_PWMCONF = 0x70;
-  union PwmConfig
-  {
-    struct
-    {
+  union PwmConfig {
+    struct {
       uint32_t pwm_offset : 8;
       uint32_t pwm_grad : 8;
       uint32_t pwm_freq : 2;
@@ -526,10 +484,8 @@ private:
   const static uint8_t PWM_GRAD_MAX = 255;
   const static uint8_t PWM_GRAD_DEFAULT = 0x14;
 
-  union PwmScale
-  {
-    struct
-    {
+  union PwmScale {
+    struct {
       uint32_t pwm_scale_sum : 8;
       uint32_t reserved_0 : 8;
       uint32_t pwm_scale_auto : 9;
@@ -539,10 +495,8 @@ private:
   };
   const static uint8_t ADDRESS_PWM_SCALE = 0x71;
 
-  union PwmAuto
-  {
-    struct
-    {
+  union PwmAuto {
+    struct {
       uint32_t pwm_offset_auto : 8;
       uint32_t reserved_0 : 8;
       uint32_t pwm_gradient_auto : 8;
@@ -562,18 +516,11 @@ private:
   void minimizeMotorCurrent();
 
   uint32_t reverseData(uint32_t data);
-  template<typename Datagram>
-  uint8_t calculateCrc(Datagram & datagram,
-    uint8_t datagram_size);
-  template<typename Datagram>
-  void sendDatagramUnidirectional(Datagram & datagram,
-    uint8_t datagram_size);
-  template<typename Datagram>
-  void sendDatagramBidirectional(Datagram & datagram,
-    uint8_t datagram_size);
+  template <typename Datagram> uint8_t calculateCrc(Datagram &datagram, uint8_t datagram_size);
+  template <typename Datagram> void sendDatagramUnidirectional(Datagram &datagram, uint8_t datagram_size);
+  template <typename Datagram> void sendDatagramBidirectional(Datagram &datagram, uint8_t datagram_size);
 
-  void write(uint8_t register_address,
-    uint32_t data);
+  void write(uint8_t register_address, uint32_t data);
   uint32_t read(uint8_t register_address);
 
   uint8_t percentToCurrentSetting(uint8_t percent);
