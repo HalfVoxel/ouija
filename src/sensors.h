@@ -9,15 +9,17 @@ float readAndSmooth(uint8_t pin, float &value, float alpha) {
 }
 
 struct AnalogSensor {
-  uint8_t pin;
+  uint8_t mPin;
 
-  float value = 0.0f;
-  float alpha;
-  unsigned long lastUpdate = 0;
+  float mValue = 0.0f;
+  float mAlpha;
+  unsigned long mLastUpdate = 0;
 
-  AnalogSensor(uint8_t pin, float smoothing) : pin(pin), alpha(1.0f / smoothing) {}
+  AnalogSensor(uint8_t pin, float smoothing) : mPin(pin), mAlpha(1.0f / smoothing) {}
 
-  void init() { pinMode(pin, INPUT); }
+  void init() { pinMode(mPin, INPUT); }
+
+  float value() { return mValue; }
 
   float update() {
     auto now = millis();

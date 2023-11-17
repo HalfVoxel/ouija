@@ -7,7 +7,7 @@ uint32_t microsteps = 16;
 // TODO: Might require a small delay before reading status? Otherwise spurious errors can happen
 void printDriverStatus(TMC2209 &driver) {
   auto st = driver.getStatus();
-  auto ms = driver.getMicrostepsPerStep();
+  auto ms = static_cast<int32_t>(driver.getMicrostepsPerStep());
 
   Serial.print("Current scaling=");
   Serial.println(st.current_scaling);
@@ -76,25 +76,25 @@ int32_t stallBase[] = {
     10, 38, 80, 133, 187, 239, 297, 341, 381, 384,
 };
 
-int32_t getStallBase(int32_t speedHz) {
-  int maxIndex = sizeof(stallBase) / sizeof(*stallBase);
-  float t = sqrt(speedHz / (float)STALL_BASE_STRIDE_HZ) - 1;
-  int index1 = (int)t;
-  int index2 = index1 + 1;
+int32_t getStallBase(uint32_t speedHz) {
+  uint32_t maxIndex = sizeof(stallBase) / sizeof(*stallBase);
+  float t = sqrt(speedHz / static_cast<float>(STALL_BASE_STRIDE_HZ)) - 1;
+  uint32_t index1 = static_cast<uint32_t>(t);
+  uint32_t index2 = index1 + 1;
   float interp = t - index1;
-  index1 = max(min(index1, maxIndex - 1), 0);
-  index2 = max(min(index2, maxIndex - 1), 0);
+  index1 = max(min(index1, maxIndex - 1), 0U);
+  index2 = max(min(index2, maxIndex - 1), 0U);
   return lerp(stallBase[index1], stallBase[index2], interp);
 }
 
 void calibrate(FastAccelStepper *stepper, TMC2209 &driver) {
-  for (int i = 1; i <= 10; i++) {
-    int32_t speed = i * i * STALL_BASE_STRIDE_HZ;
+  for (uint32_t i = 1; i <= 10; i++) {
+    uint32_t speed = i * i * STALL_BASE_STRIDE_HZ;
     stepper->setSpeedInHz(speed * microsteps);
     stepper->runForward();
     delay(10);
     int32_t stall = 0;
-    const size_t SAMPLES = 100;
+    const int32_t SAMPLES = 100;
     for (int j = 0; j < SAMPLES; j++) {
       delay(10);
       stall += driver.getStallGuardResult();
@@ -106,8 +106,8 @@ void calibrate(FastAccelStepper *stepper, TMC2209 &driver) {
     Serial.println(stall);
     stallBase[i - 1] = stall;
   }
-  for (int i = 1; i <= 10; i++) {
-    int32_t speed = i * i * STALL_BASE_STRIDE_HZ;
+  for (uint32_t i = 1; i <= 10; i++) {
+    uint32_t speed = i * i * STALL_BASE_STRIDE_HZ;
     Serial.print("Stall check: ");
     Serial.print(stallBase[i - 1]);
     Serial.print(" = ");
