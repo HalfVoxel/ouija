@@ -46,30 +46,105 @@ float lastT = 0;
 AnalogSensor p1(POT1, 10);
 AnalogSensor p2(POT2, 10);
 AnalogSensor p3(POT3, 10);
+TouchSensor touch(TOUCH_PAD_NUM3, 200, 800);
 
-uint32_t manualSpeed = -1;
-uint32_t realSpeed = 0;
-uint32_t motorsEnabled = ~0;
+int32_t manualSpeed = -1;
+int32_t realSpeed = 0;
+uint32_t motorsEnabled = ~0U;
+
+Battery battery(26);
 
 void hardwareSetup() {
   p1.init();
   p2.init();
   p3.init();
+
   Serial.begin(SERIAL_BAUD_RATE);
   // adjustMotorPositions();
 
-  engine.init();
-  for (int i = 0; i < nSteppers; i++) {
-    steppers[i] = setupStepper(drivers[i], step_pins[i], dir_pins[i],
-                               (TMC2209::SerialAddress)(TMC2209::SerialAddress::SERIAL_ADDRESS_0 + i), serial_stream,
-                               RUN_CURRENT_PERCENT);
-  }
-  setMicrosteps(microsteps);
+  // engine.init();
+  // for (int i = 0; i < nSteppers; i++) {
+  //   steppers[i] = setupStepper(drivers[i], step_pins[i], dir_pins[i],
+  //                              (TMC2209::SerialAddress)(TMC2209::SerialAddress::SERIAL_ADDRESS_0 + i), serial_stream,
+  //                              RUN_CURRENT_PERCENT);
+  // }
+  // setMicrosteps(microsteps);
   Serial.println("Setup done");
+
+  // Isolate GPIO12 pin from external circuits. This is needed for modules
+  // which have an external pull-up resistor on GPIO12 (such as ESP32-WROVER)
+  // to minimize current consumption.
+  // TODO: Necessary?
+  // rtc_gpio_isolate(GPIO_NUM_12);
+
+  pinMode(LED_PIN, OUTPUT);
+  for (int i = 0; i < 5; i++) {
+    digitalWrite(LED_PIN, LOW);
+    delay(50);
+    digitalWrite(LED_PIN, HIGH);
+    delay(50);
+  }
 }
 
 void setup() {
   hardwareSetup();
+
+  if (true) {
+    battery.init();
+    touch.init();
+    setCpuFrequencyMhz(80);
+
+    auto server = setupBluetoothServer();
+    uint32_t i = 0;
+    uint32_t lastTouch = 0;
+    uint32_t wakeTime = millis();
+    uint32_t connectionTime = 0;
+    while (true) {
+      auto t = millis();
+      if ((i % 10) == 0) {
+        battery.update();
+        server->setBattery(battery);
+        if (server->anyConnections()) {
+          if (connectionTime == 0) {
+            connectionTime = t;
+          }
+        }
+      }
+      touch.update();
+      if (touch.isTouched()) {
+        lastTouch = t;
+      }
+      // Serial.print("Touch: ");
+      // Serial.println(touch.value());
+      server->setTouch(touch.isTouched());
+
+      if ((lastTouch == 0 || t - lastTouch > MILLIS_PER_SECOND * 60) &&
+          (t - wakeTime > MILLIS_PER_SECOND * 30 ||
+           (connectionTime != 0 && t - connectionTime > MILLIS_PER_SECOND * 4))) {
+        Serial.println("Going to sleep");
+        BLEDevice::deinit(false);
+        touch.setWakeupFromTouch();
+        ESP_ERROR_CHECK(esp_sleep_enable_timer_wakeup(10 * 60 * 1000000));
+        esp_deep_sleep_start();
+      }
+
+      delay(100);
+      i++;
+    }
+  } else {
+    try {
+      auto client = setupBluetoothClient();
+      while (true) {
+        Serial.println("Updating");
+        client->update();
+        delay(1000);
+      }
+    } catch (const std::exception &e) {
+      Serial.println("Exception");
+      Serial.println(e.what());
+    }
+  }
+  return;
 
   for (int i = 0; i < 100; i++) {
     home();
