@@ -15,21 +15,28 @@
 // https://www.uuidgenerator.net/
 
 const BLEUUID SERVICE_UUID = BLEUUID("16fbc490-4e81-4b38-ace3-f78a1da5937b");
-const BLEUUID CHARACTERISTIC_UUID_TOUCH = BLEUUID("75152a81-2aa4-4a0f-bc8e-9c756866b368");
+const BLEUUID CHARACTERISTIC_UUID_TIME = BLEUUID("75152a81-2aa4-4a0f-bc8e-9c756866b368");
+const BLEUUID CHARACTERISTIC_UUID_TOUCH = BLEUUID(0x2AE2U); // "75152a81-2aa4-4a0f-bc8e-9c756866b368");
+const BLEUUID CHARACTERISTIC_UUID_TOUCH_RAW = BLEUUID("75152a81-2aa4-4a0f-bc8e-9c756866b368");
 const BLEUUID CHARACTERISTIC_UUID_BATTERY_PERCENTAGE = BLEUUID(0x2A19U); // "312ada26-4704-445a-995a-cc54dc878fd8");
 const BLEUUID CHARACTERISTIC_UUID_BATTERY_VOLTAGE = BLEUUID(0x2B18U);
 
 class PlanchetServer : public BLEServerCallbacks {
   BLEServer *mServer;
   BLEService *mService;
+  BLECharacteristic *mCharacteristicTime;
   BLECharacteristic *mCharacteristicTouch;
+  BLECharacteristic *mCharacteristicTouchRaw;
   BLECharacteristic *mCharacteristicBatteryPercentage;
   BLECharacteristic *mCharacteristicBatteryVoltage;
 
 public:
   PlanchetServer(BLEServer *server, BLEService *service) : mServer(server), mService(service) {
+    mCharacteristicTime = service->createCharacteristic(CHARACTERISTIC_UUID_TIME, BLECharacteristic::PROPERTY_READ);
     mCharacteristicTouch = service->createCharacteristic(
         CHARACTERISTIC_UUID_TOUCH, BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY);
+    mCharacteristicTouchRaw =
+        service->createCharacteristic(CHARACTERISTIC_UUID_TOUCH_RAW, BLECharacteristic::PROPERTY_READ);
     mCharacteristicBatteryPercentage =
         service->createCharacteristic(CHARACTERISTIC_UUID_BATTERY_PERCENTAGE, BLECharacteristic::PROPERTY_READ);
     mCharacteristicBatteryVoltage =
@@ -38,9 +45,15 @@ public:
     // setBattery(0);
   }
 
-  void setTouch(uint32_t v) {
+  void setTime(uint32_t v) {
     // uint32_t vi = v ? 1 : 0;
-    mCharacteristicTouch->setValue(v);
+    mCharacteristicTime->setValue(v);
+  }
+
+  void setTouch(bool v, uint32_t raw) {
+    uint32_t vi = v ? 1 : 0;
+    mCharacteristicTouch->setValue(vi);
+    mCharacteristicTouchRaw->setValue(raw);
   }
 
   void setBattery(const Battery &battery) {

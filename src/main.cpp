@@ -116,15 +116,23 @@ void setup() {
       }
       // Serial.print("Touch: ");
       // Serial.println(touch.value());
-      server->setTouch(touch.isTouched());
+      server->setTouch(touch.isTouched(), touch.value());
+      server->setTime(i);
 
-      if ((lastTouch == 0 || t - lastTouch > MILLIS_PER_SECOND * 60) &&
-          (t - wakeTime > MILLIS_PER_SECOND * 30 ||
-           (connectionTime != 0 && t - connectionTime > MILLIS_PER_SECOND * 4))) {
+      bool shouldSleep = (lastTouch == 0 || t - lastTouch > MILLIS_PER_SECOND * 60) &&
+                         (t - wakeTime > MILLIS_PER_SECOND * 30 ||
+                          (connectionTime != 0 && t - connectionTime > MILLIS_PER_SECOND * 100));
+
+      if (shouldSleep && false) {
         Serial.println("Going to sleep");
         BLEDevice::deinit(false);
         touch.setWakeupFromTouch();
         ESP_ERROR_CHECK(esp_sleep_enable_timer_wakeup(10 * 60 * 1000000));
+
+        digitalWrite(LED_PIN, LOW);
+        delay(50);
+        digitalWrite(LED_PIN, HIGH);
+
         esp_deep_sleep_start();
       }
 
