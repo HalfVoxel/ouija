@@ -24,9 +24,9 @@ struct OuijaBoardClient : public BLEAdvertisedDeviceCallbacks {
   BLEClient *client;
   BLEAdvertisedDevice mAdvertisedDevice;
   bool foundDevice = false;
+  bool touchActive;
 
-  template <typename T> bool readData(BLEUUID characteristicUUID) {
-    Serial.println("Checking connections...");
+  template <typename T> bool readData(BLEUUID characteristicUUID, T &value) const {
     if (!client->isConnected()) {
       Serial.println("Client is not connected");
       return false;
@@ -42,23 +42,35 @@ struct OuijaBoardClient : public BLEAdvertisedDeviceCallbacks {
       Serial.println("Could not find characteristic");
       return false;
     }
-    auto value = characteristic->readValue();
-    if (value.size() != sizeof(T)) {
+    auto valueStr = characteristic->readValue();
+    if (valueStr.size() != sizeof(T)) {
       Serial.print("Invalid value size. Client is probably disconnected. Size=");
-      Serial.println(value.size());
+      Serial.println(valueStr.size());
       delay(1000);
       return false;
     }
-    T valueI;
-    memcpy(&valueI, value.data(), sizeof(T));
+    memcpy(&value, valueStr.data(), sizeof(T));
     Serial.print("Value: ");
-    Serial.println(valueI);
+    Serial.println(value);
 
     return true;
   }
 
   void update() {
-    if (!readData<uint32_t>(CHARACTERISTIC_UUID_BATTERY_PERCENTAGE)) {
+    uint32_t batteryPercent;
+    uint32_t touchRaw;
+    bool failed = !readData<uint32_t>(CHARACTERISTIC_UUID_BATTERY_PERCENTAGE, batteryPercent) ||
+                  !readData<uint32_t>(CHARACTERISTIC_UUID_TOUCH_RAW, touchRaw);
+    if (!failed) {
+      Serial.print("Battery: ");
+      Serial.print(batteryPercent);
+      Serial.print(" Touch: ");
+      Serial.println(touchRaw);
+    }
+
+    touchActive = !failed && touchRaw <= 400;
+
+    if (failed) {
       Serial.println("Disconnecting...");
       client->disconnect();
 

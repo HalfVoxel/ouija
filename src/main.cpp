@@ -5,6 +5,7 @@
 #include "esp_log.h"
 #include "math.h"
 #include "motion.h"
+#include "ota.h"
 #include "sensors.h"
 #include "time.h"
 #include "tmc2209_utils.h"
@@ -46,29 +47,40 @@ float lastT = 0;
 AnalogSensor p1(POT1, 10);
 AnalogSensor p2(POT2, 10);
 AnalogSensor p3(POT3, 10);
-TouchSensor touch(TOUCH_PAD_NUM3, 200, 800);
+TouchSensor touch(TOUCH_PAD_NUM3, 400, 800);
 
 int32_t manualSpeed = -1;
 int32_t realSpeed = 0;
 uint32_t motorsEnabled = ~0U;
 
-Battery battery(26);
+Battery battery(AnalogSensor(26, 10));
 
-void hardwareSetup() {
-  p1.init();
-  p2.init();
-  p3.init();
+enum BoardType {
+  BOARD_TYPE_PLANCHET,
+  BOARD_TYPE_BOARD,
+};
 
+const BoardType boardType = BoardType::BOARD_TYPE_BOARD;
+RTC_DATA_ATTR uint32_t wakeupCount = 0;
+
+void setupHardware() {
+  wakeupCount++;
   Serial.begin(SERIAL_BAUD_RATE);
   // adjustMotorPositions();
 
-  // engine.init();
-  // for (int i = 0; i < nSteppers; i++) {
-  //   steppers[i] = setupStepper(drivers[i], step_pins[i], dir_pins[i],
-  //                              (TMC2209::SerialAddress)(TMC2209::SerialAddress::SERIAL_ADDRESS_0 + i), serial_stream,
-  //                              RUN_CURRENT_PERCENT);
-  // }
-  // setMicrosteps(microsteps);
+  if (boardType == BoardType::BOARD_TYPE_BOARD) {
+    p1.init();
+    p2.init();
+    p3.init();
+
+    engine.init();
+    for (int i = 0; i < nSteppers; i++) {
+      steppers[i] = setupStepper(drivers[i], step_pins[i], dir_pins[i],
+                                 static_cast<TMC2209::SerialAddress>(TMC2209::SerialAddress::SERIAL_ADDRESS_0 + i),
+                                 serial_stream, RUN_CURRENT_PERCENT);
+    }
+    setMicrosteps(microsteps);
+  }
   Serial.println("Setup done");
 
   // Isolate GPIO12 pin from external circuits. This is needed for modules
@@ -86,71 +98,124 @@ void hardwareSetup() {
   }
 }
 
-void setup() {
-  hardwareSetup();
+void monitorBluetooth(void *param) {
+  auto client = static_cast<OuijaBoardClient *>(param);
+  while (true) {
+    client->update();
+    delay(50);
+  }
+}
 
-  if (true) {
-    battery.init();
-    touch.init();
-    setCpuFrequencyMhz(80);
+void setupPlanchette() {
+  battery.init();
+  touch.init();
+  setCpuFrequencyMhz(80);
 
-    auto server = setupBluetoothServer();
-    uint32_t i = 0;
-    uint32_t lastTouch = 0;
-    uint32_t wakeTime = millis();
-    uint32_t connectionTime = 0;
-    while (true) {
-      auto t = millis();
-      if ((i % 10) == 0) {
-        battery.update();
-        server->setBattery(battery);
-        if (server->anyConnections()) {
-          if (connectionTime == 0) {
-            connectionTime = t;
-          }
+  auto server = setupBluetoothServer();
+  uint32_t i = 0;
+  uint32_t lastTouch = 0;
+  uint32_t wakeTime = millis();
+  uint32_t connectionTime = 0;
+  while (true) {
+    auto t = millis();
+    if ((i % 10) == 0) {
+      battery.update();
+      server->setBattery(battery);
+      if (server->anyConnections()) {
+        if (connectionTime == 0) {
+          connectionTime = t;
         }
       }
-      touch.update();
-      if (touch.isTouched()) {
-        lastTouch = t;
-      }
-      // Serial.print("Touch: ");
-      // Serial.println(touch.value());
-      server->setTouch(touch.isTouched(), touch.value());
-      server->setTime(i);
-
-      bool shouldSleep = (lastTouch == 0 || t - lastTouch > MILLIS_PER_SECOND * 60) &&
-                         (t - wakeTime > MILLIS_PER_SECOND * 30 ||
-                          (connectionTime != 0 && t - connectionTime > MILLIS_PER_SECOND * 100));
-
-      if (shouldSleep && false) {
-        Serial.println("Going to sleep");
-        BLEDevice::deinit(false);
-        touch.setWakeupFromTouch();
-        ESP_ERROR_CHECK(esp_sleep_enable_timer_wakeup(10 * 60 * 1000000));
-
-        digitalWrite(LED_PIN, LOW);
-        delay(50);
-        digitalWrite(LED_PIN, HIGH);
-
-        esp_deep_sleep_start();
-      }
-
-      delay(100);
-      i++;
     }
+    touch.update();
+    if (touch.isTouched()) {
+      lastTouch = t;
+    }
+    // Serial.print("Touch: ");
+    // Serial.println(touch.value());
+    server->setTouch(touch.isTouched(), touch.value());
+    server->setTime(i);
+
+    bool shouldSleep = (lastTouch == 0 || t - lastTouch > MILLIS_PER_SECOND * 60) &&
+                       (t - wakeTime > MILLIS_PER_SECOND * 30 ||
+                        (connectionTime != 0 && t - connectionTime > MILLIS_PER_SECOND * 100));
+
+    if (shouldSleep) {
+      Serial.println("Going to sleep");
+      BLEDevice::deinit(false);
+      touch.setWakeupFromTouch();
+      ESP_ERROR_CHECK(esp_sleep_enable_timer_wakeup(60 * 60 * static_cast<uint64_t>(MICROS_PER_SECOND)));
+
+      digitalWrite(LED_PIN, LOW);
+      delay(50);
+      digitalWrite(LED_PIN, HIGH);
+
+      esp_deep_sleep_start();
+    }
+
+    delay(100);
+    i++;
+  }
+}
+
+void setupOuijaBoard() {
+  home();
+
+  auto client = setupBluetoothClient();
+  xTaskCreate(monitorBluetooth, "BLE", 4096, client, 10, nullptr);
+
+  int steps = 100;
+  lastT = micros();
+  for (int i = 0; i < 20 * steps; i++) {
+    while (!client->touchActive) {
+      for (int j = 0; j < nSteppers; j++) {
+        steppers[j]->stopMove();
+      }
+      delay(20);
+    }
+
+    auto time = micros();
+    auto dt = (time - lastT) * 0.000001f;
+    lastT = time;
+
+    float t = i / static_cast<float>(steps);
+    float c[2];
+    memcpy(c, boardCenter, sizeof(boardCenter));
+    c[0] += 60 * cos(t * (float)TWO_PI);
+    c[1] += 28 * sin(t * (float)TWO_PI);
+    int32_t target[3];
+    positionToMotor(c, target);
+    moveToPosition(target, 40);
+    auto t0 = millis();
+    if (!blockUntilAtTarget(30 * static_cast<int32_t>(microsteps), target, [&] { return client->touchActive; })) {
+      i--;
+      continue;
+    }
+    auto t1 = millis();
+    Serial.print("Move took ");
+    Serial.println(t1 - t0);
+  }
+  // while (true) {
+  //   Serial.println("Updating");
+  //   client->update();
+  //   delay(100);
+
+  //   client->touchActive
+  // }
+}
+
+void setup() {
+  setupHardware();
+
+  // Start OTA on first wakeup only
+  if (wakeupCount == 1) {
+    setupOTA();
+  }
+
+  if (boardType == BoardType::BOARD_TYPE_PLANCHET) {
+    setupPlanchette();
   } else {
-    try {
-      auto client = setupBluetoothClient();
-      while (true) {
-        Serial.println("Updating");
-        client->update();
-        delay(1000);
-      }
-    } catch (const std::exception &e) {
-      Serial.println("Exception");
-      Serial.println(e.what());
-    }
+    setupOuijaBoard();
   }
   return;
 

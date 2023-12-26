@@ -1,6 +1,8 @@
 import os.path
+from ota_upload import register_ota_upload
 
 Import("projenv")
+Import("env")
 
 include_flags = []
 # print(projenv.keys())
@@ -31,3 +33,5 @@ projenv["CPPPATH"] = list(set(projenv["CPPPATH"]) - set(to_remove))
 # print(projenv["PROJECT_SOURCE_DIR"])
 # print("Build flags: ", projenv["CXXFLAGS"])
 # exit(1)
+
+# register_ota_upload(env)

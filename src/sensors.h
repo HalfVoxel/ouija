@@ -4,7 +4,7 @@
 #include <Arduino.h>
 
 float readAndSmooth(uint8_t pin, float &value, float alpha) {
-  auto newValue = analogRead(pin) / 4096.0f;
+  auto newValue = analogRead(pin) / 4095.0f;
   value = lerp(value, newValue, alpha);
   return value;
 }
@@ -20,13 +20,16 @@ struct AnalogSensor {
 
   void init() { pinMode(mPin, INPUT); }
 
-  float value() { return mValue; }
+  float value() const { return mValue; }
 
   float update() {
     auto now = millis();
-    auto dt = (now - mLastUpdate) * 0.000001f;
+    auto dt = (now - mLastUpdate) * 0.001f;
+    if (now == mLastUpdate)
+      return mValue;
+    auto alpha = mLastUpdate != 0 ? mAlpha * dt : 1.0f;
     mLastUpdate = now;
-    readAndSmooth(mPin, mValue, mAlpha * dt);
+    readAndSmooth(mPin, mValue, alpha);
     return mValue;
   }
 };

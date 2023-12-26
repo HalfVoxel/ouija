@@ -144,8 +144,8 @@ void moveToPosition(const int32_t motorPositions[nSteppers], int32_t speed, int8
 
     int32_t delta = abs(motorPositions[i] - steppers[i]->getCurrentPosition());
     auto motorSpeed =
-        static_cast<uint32_t>(max(static_cast<int32_t>(microsteps),
-                                  (speed * delta * static_cast<int32_t>(microsteps)) / static_cast<int32_t>(maxDelta)));
+        static_cast<uint32_t>(max(static_cast<int32_t>(microsteps), (speed * delta * static_cast<int32_t>(microsteps)) /
+                                                                        max(1, static_cast<int32_t>(maxDelta))));
     steppers[i]->setSpeedInHz(motorSpeed);
     // steppers[i]->stopMove();
     auto res = steppers[i]->moveTo(motorPositions[i]);
@@ -162,12 +162,15 @@ void moveToPosition(const int32_t motorPositions[nSteppers], int32_t speed, int8
   Serial.println();
 }
 
-void blockUntilAtTarget(int32_t maxMicrosteps, int32_t target[nSteppers]) {
+bool blockUntilAtTarget(
+    int32_t maxMicrosteps, int32_t target[nSteppers], std::function<bool()> shouldContinue = []() { return true; }) {
   bool any = true;
   while (any) {
     any = false;
     for (int i = 0; i < nSteppers; i++) {
       while (abs(steppers[i]->getCurrentPosition() - target[i]) > maxMicrosteps) {
+        if (!shouldContinue())
+          return false;
         any = true;
         // Serial.print("E");
         // Serial.print(i);
@@ -177,6 +180,7 @@ void blockUntilAtTarget(int32_t maxMicrosteps, int32_t target[nSteppers]) {
       }
     }
   }
+  return true;
 }
 
 void blockUntilAlmostNotMoving(int32_t maxMicrosteps) {
@@ -232,6 +236,30 @@ void homeStep(uint32_t speed, float stallThresholds[nSteppers]) {
   }
 }
 
+void moveInCircle() {
+  int32_t target[3];
+  int steps = 100;
+  auto lastT = micros();
+  for (int i = 0; i < 20 * steps; i++) {
+    auto time = micros();
+    auto dt = (time - lastT) * 0.000001f;
+    lastT = time;
+
+    float t = i / static_cast<float>(steps);
+    float c[2];
+    memcpy(c, boardCenter, sizeof(boardCenter));
+    c[0] += 60 * cos(t * (float)TWO_PI);
+    c[1] += 28 * sin(t * (float)TWO_PI);
+    positionToMotor(c, target);
+    moveToPosition(target, 40);
+    auto t0 = millis();
+    blockUntilAtTarget(30 * static_cast<int32_t>(microsteps), target);
+    auto t1 = millis();
+    Serial.print("Move took ");
+    Serial.println(t1 - t0);
+  }
+}
+
 void homeMotors() {
   float target1[nSteppers] = {1.0f, 1.1f};
   homeStep(80, target1);
@@ -266,26 +294,7 @@ void homeMotors() {
   moveToPosition(target, 160);
   blockUntilNotMoving();
 
-  int steps = 100;
-  auto lastT = micros();
-  for (int i = 0; i < 20 * steps; i++) {
-    auto time = micros();
-    auto dt = (time - lastT) * 0.000001f;
-    lastT = time;
-
-    float t = i / static_cast<float>(steps);
-    float c[2];
-    memcpy(c, boardCenter, sizeof(boardCenter));
-    c[0] += 60 * cos(t * (float)TWO_PI);
-    c[1] += 28 * sin(t * (float)TWO_PI);
-    positionToMotor(c, target);
-    moveToPosition(target, 40);
-    auto t0 = millis();
-    blockUntilAtTarget(30 * static_cast<int32_t>(microsteps), target);
-    auto t1 = millis();
-    Serial.print("Move took ");
-    Serial.println(t1 - t0);
-  }
+  // moveInCircle();
 }
 
 void home() {
