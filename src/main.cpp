@@ -2,6 +2,7 @@
 #include "ble_client.h"
 #include "ble_server.h"
 #include "communication.h"
+#include "debug.h"
 #include "esp_log.h"
 #include "math.h"
 #include "motion.h"
@@ -12,12 +13,6 @@
 #include <Arduino.h>
 #include <FastAccelStepper.h>
 #include <TMC2209x.h>
-
-// This example will not work on Arduino boards without HardwareSerial ports,
-// such as the Uno, Nano, and Mini.
-//
-// See this reference for more details:
-// https://www.arduino.cc/reference/en/language/functions/communication/serial/
 
 HardwareSerial &serial_stream = Serial2;
 
@@ -31,8 +26,6 @@ HardwareSerial &serial_stream = Serial2;
 #define POT2 26
 #define POT3 25
 #define DIAG 14
-
-const uint32_t LED_PIN = 22;
 
 const uint8_t step_pins[nSteppers] = {STEP_PIN1, STEP_PIN2};
 const uint8_t dir_pins[nSteppers] = {DIR_PIN1, DIR_PIN2};
@@ -64,6 +57,9 @@ const BoardType boardType = BoardType::BOARD_TYPE_BOARD;
 RTC_DATA_ATTR uint32_t wakeupCount = 0;
 
 void setupHardware() {
+  pinMode(LED_PIN, OUTPUT);
+  flash();
+
   wakeupCount++;
   Serial.begin(SERIAL_BAUD_RATE);
   // adjustMotorPositions();
@@ -78,6 +74,12 @@ void setupHardware() {
       steppers[i] = setupStepper(drivers[i], step_pins[i], dir_pins[i],
                                  static_cast<TMC2209::SerialAddress>(TMC2209::SerialAddress::SERIAL_ADDRESS_0 + i),
                                  serial_stream, RUN_CURRENT_PERCENT);
+
+      if (steppers[i] == NULL) {
+        Serial.println("Failed to initialize stepper");
+        flash(10, 200);
+        ESP.restart();
+      }
     }
     setMicrosteps(microsteps);
   }
@@ -88,14 +90,6 @@ void setupHardware() {
   // to minimize current consumption.
   // TODO: Necessary?
   // rtc_gpio_isolate(GPIO_NUM_12);
-
-  pinMode(LED_PIN, OUTPUT);
-  for (int i = 0; i < 5; i++) {
-    digitalWrite(LED_PIN, LOW);
-    delay(50);
-    digitalWrite(LED_PIN, HIGH);
-    delay(50);
-  }
 }
 
 void monitorBluetooth(void *param) {
