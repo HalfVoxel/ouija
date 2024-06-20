@@ -34,6 +34,28 @@ struct AnalogSensor {
   }
 };
 
+struct BooleanSensor {
+  unsigned long mLastUpdate = 1000000;
+  uint8_t mPin;
+
+  bool mValue = false;
+
+  BooleanSensor(uint8_t pin) : mPin(pin) {}
+
+  void init() { pinMode(mPin, INPUT); }
+
+  bool value() const { return mValue; }
+
+  bool update() {
+    auto now = millis();
+    if (now == mLastUpdate)
+      return mValue;
+    mLastUpdate = now;
+    mValue = digitalRead(mPin) == HIGH;
+    return mValue;
+  }
+};
+
 bool touchInitialized = false;
 
 #define TOUCH_THRESH_NO_USE 0

@@ -82,6 +82,10 @@ void setupHardware() {
       }
     }
     setMicrosteps(microsteps);
+
+    for (int i = 0; i < 2; i++) {
+      limitSwitches[i].init();
+    }
   }
   Serial.println("Setup done");
 

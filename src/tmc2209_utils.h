@@ -2,7 +2,7 @@
 #include <FastAccelStepper.h>
 #include <TMC2209x.h>
 
-uint32_t microsteps = 16;
+uint32_t microsteps = 64;
 
 // TODO: Might require a small delay before reading status? Otherwise spurious errors can happen
 void printDriverStatus(TMC2209 &driver) {
